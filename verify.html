@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Check Backspace's privacy</title>
+  <meta name="description" content="How to check for yourself that Backspace keeps only counts, can't reach the network, and is signed and notarized. Plus the Backspace privacy policy.">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="stylesheet" href="assets/site.css">
+  <meta property="og:title" content="Check Backspace's privacy yourself">
+  <meta property="og:image" content="https://bitbotlabs.com/backspace-releases/assets/icon.png">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <a class="brand" href="./"><img src="assets/icon.png" alt="" width="30" height="30">Backspace</a>
+      <nav class="links" aria-label="Sections">
+        <a href="./#features">Features</a>
+        <a href="./#privacy">Privacy</a>
+        <a href="./#start">Get started</a>
+        <a href="./#faq">FAQ</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="doc">
+    <a class="back" href="./">← Back to Backspace</a>
+    <h1>Don't take our word for it.</h1>
+    <p class="lede">To notice a backspace in other apps, Backspace needs macOS's <strong>Input Monitoring</strong> permission. That permission is all-or-nothing: macOS can't limit it to one key. So instead of asking you to trust us, here are five checks you can run yourself in about five minutes.</p>
+    <p class="muted">These apply to Backspace 0.2.0 and later. Check your version in Backspace ▸ Settings ▸ About.</p>
+
+    <h2><span class="n">1</span>It can't reach the internet</h2>
+    <p>Backspace runs in the <strong>macOS App Sandbox</strong>, and the sandbox only allows what the app's signed <em>entitlements</em> list. Backspace has no network entitlement, so macOS itself blocks it from opening any connection, whatever its code tries to do. You can read the entitlements in Terminal:</p>
+    <pre><code>codesign -d --entitlements - /Applications/Backspace.app</code></pre>
+    <p>You should see exactly this:</p>
+    <pre><code>[Dict]
+	[Key] com.apple.security.app-sandbox
+	[Value]
+		[Bool] true
+	[Key] com.apple.security.files.user-selected.read-only
+	[Value]
+		[Bool] true
+	[Key] com.apple.security.temporary-exception.mach-lookup.global-name
+	[Value]
+		[Array]
+			[String] com.simonroscoe.Backspace-spks
+			[String] com.simonroscoe.Backspace-spki</code></pre>
+    <table class="ent">
+      <thead><tr><th>Entitlement</th><th>What it allows</th></tr></thead>
+      <tbody>
+        <tr><td><code>app-sandbox</code></td><td>Turns the sandbox on. Without an entitlement, the app can't do it.</td></tr>
+        <tr><td><code>files.user-selected.read-only</code></td><td>Read a file <em>you</em> pick in an Open dialog: the custom sound option in Settings ▸ Feedback.</td></tr>
+        <tr><td><code>mach-lookup … -spks / -spki</code></td><td>Talk to Sparkle's installer helpers, so updates can be installed. Not network access.</td></tr>
+      </tbody>
+    </table>
+    <div class="callout">
+      <p><strong>What's missing is the point.</strong> There's no <code>com.apple.security.network.client</code> or <code>network.server</code>, and no access to your files beyond the one you pick.</p>
+    </div>
+
+    <h3>How do updates work, then?</h3>
+    <p>Update checks run in a separate, open-source helper from the <a href="https://sparkle-project.org">Sparkle</a> update framework. It has its own sandbox that allows network access and nothing else, and it only fetches the update feed and update files from GitHub. You can check its entitlements too:</p>
+    <pre><code>codesign -d --entitlements - /Applications/Backspace.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc</code></pre>
+    <pre><code><span class="c"># expected:</span> com.apple.security.app-sandbox  true
+<span class="c">#           </span> com.apple.security.network.client  true</code></pre>
+    <p class="muted">If you'd rather have no network activity at all, turn off Settings ▸ General ▸ <em>Check for updates automatically</em>.</p>
+
+    <h2><span class="n">2</span>Watch the network</h2>
+    <p>For a live view, install a free network monitor such as <a href="https://objective-see.org/products/lulu.html">LuLu</a> (open source, by Objective-See). It asks before any app connects anywhere. With Backspace running, you should see:</p>
+    <ul>
+      <li><strong>Backspace</strong>: never.</li>
+      <li><strong>Downloader</strong> (Sparkle): about once a day, to <code>github.com</code> and <code>release-assets.githubusercontent.com</code>, only while automatic update checks are on.</li>
+    </ul>
+    <p>You can block the Downloader in LuLu if you like. Backspace keeps counting either way.</p>
+
+    <h2><span class="n">3</span>Read everything it stores</h2>
+    <p>All of Backspace's data is one small, human-readable file. Open it with <strong>Settings ▸ About ▸ Show Data File in Finder</strong>, or in Terminal:</p>
+    <pre><code>open -e ~/Library/Containers/com.simonroscoe.Backspace/Data/Library/Application\ Support/Backspace/history.json</code></pre>
+    <p>A day looks like this. Numbers per key type and a total keystroke count, nothing else:</p>
+    <pre><code>{
+  "label" : "2026-11-15",
+  "start" : "2026-11-15T05:00:00Z",
+  "end" : "2026-11-16T05:00:00Z",
+  "manualResetCount" : 0,
+  "tally" : {
+    "counts" : { "backspace" : 226, "wordBackspace" : 9 },
+    "keystrokes" : 2735
+  }
+}</code></pre>
+    <p>No letters, words, timings or app names, because Backspace never keeps them. Settings are in <code>~/Library/Containers/com.simonroscoe.Backspace/Data/Library/Preferences/</code>. Because the app is sandboxed, it can't write anywhere else.</p>
+
+    <h2><span class="n">4</span>Check who made it</h2>
+    <pre><code>spctl --assess --type execute -vv /Applications/Backspace.app</code></pre>
+    <pre><code>/Applications/Backspace.app: <span class="ok">accepted</span>
+source=Notarized Developer ID
+origin=Developer ID Application: Northerly Labs Ltd. (Q2BFTP582X)</code></pre>
+    <p>This shows the app is signed by Northerly Labs Ltd. and hasn't been changed since. <span class="muted">To be clear about what this doesn't mean: Apple's notarization is an automated malware and signing check, not a privacy review. Checks 1–3 are the privacy evidence.</span></p>
+
+    <h2><span class="n">5</span>Switch it off any time</h2>
+    <ul>
+      <li><strong>Stop counting:</strong> System Settings ▸ Privacy &amp; Security ▸ Input Monitoring ▸ turn off Backspace. It stops seeing key presses immediately.</li>
+      <li><strong>Remove it completely:</strong> quit Backspace, move it to the Trash, and delete <code>~/Library/Containers/com.simonroscoe.Backspace</code>.</li>
+    </ul>
+
+    <h2 id="policy">Privacy policy</h2>
+    <p class="muted">Last updated 15 November 2026. Applies to Backspace for macOS, published by Northerly Labs Ltd.</p>
+    <ul>
+      <li><strong>We collect no personal data.</strong> Backspace has no accounts, analytics, crash reporting or advertising.</li>
+      <li><strong>On your Mac:</strong> Backspace stores daily counts per key type and a total keystroke count, as described above. It never stores or sends what you type. The data stays on your Mac and is deleted with the app's folder.</li>
+      <li><strong>Update checks:</strong> if automatic checks are on, Sparkle's helper downloads the update feed from GitHub about once a day. Like any web request, GitHub receives your IP address and a user agent naming the app and its version. GitHub's handling of that is covered by the <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub Privacy Statement</a>. We don't receive or keep it.</li>
+      <li><strong>Notifications</strong> are created locally on your Mac and contain only counts.</li>
+      <li><strong>Questions:</strong> <a href="https://github.com/srosky/backspace-releases/issues">open an issue on GitHub</a>.</li>
+    </ul>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>© 2026 Northerly Labs Ltd.</span>
+      <span><a href="./">Home</a> · <a href="https://github.com/srosky/backspace-releases/releases">All releases</a></span>
+    </div>
+  </footer>
+</body>
+</html>
