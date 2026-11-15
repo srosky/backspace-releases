@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Backspace: a backspace counter for your Mac's menu bar</title>
+  <meta name="description" content="Backspace is a tiny macOS menu bar app that counts how many times you press backspace each day. Private by design: only counts are stored, never what you type.">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="apple-touch-icon" href="assets/icon.png">
+  <meta property="og:title" content="Backspace for macOS">
+  <meta property="og:description" content="A quiet count of every backspace, right in your menu bar.">
+  <meta property="og:image" content="https://bitbotlabs.com/backspace-releases/assets/icon.png">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  <style>
+    :root {
+      --bg: #fbfbfd;
+      --surface: #ffffff;
+      --surface-2: #f2f2f7;
+      --text: #1d1d1f;
+      --muted: #6e6e73;
+      --border: rgba(0, 0, 0, 0.09);
+      --accent: #6a5cf5;
+      --accent-2: #8a4fdc;
+      --accent-text: #ffffff;
+      --bar: rgba(60, 60, 67, 0.22);
+      --menubar: rgba(246, 246, 248, 0.86);
+      --shadow: 0 1px 2px rgba(0,0,0,.06), 0 12px 40px rgba(30, 20, 80, .12);
+      --radius: 18px;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f0f12;
+        --surface: #1c1c21;
+        --surface-2: #26262c;
+        --text: #f5f5f7;
+        --muted: #a1a1a8;
+        --border: rgba(255, 255, 255, 0.1);
+        --accent: #8b80ff;
+        --accent-2: #a874f0;
+        --bar: rgba(235, 235, 245, 0.22);
+        --menubar: rgba(40, 40, 46, 0.86);
+        --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 40px rgba(0,0,0,.45);
+        color-scheme: dark;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 17px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+    .num { font-variant-numeric: tabular-nums; }
+
+    /* Header */
+    header.top { padding: 18px 0; }
+    header.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; color: var(--text); }
+    .brand:hover { text-decoration: none; }
+    .brand img { width: 30px; height: 30px; }
+    nav.links { display: flex; gap: 22px; font-size: 15px; }
+    nav.links a { color: var(--muted); }
+    nav.links a:hover { color: var(--text); text-decoration: none; }
+
+    /* Hero */
+    .hero { display: grid; grid-template-columns: 1.05fr 1fr; gap: 56px; align-items: center; padding: 56px 0 72px; }
+    .hero h1 { font-size: clamp(40px, 6vw, 60px); line-height: 1.04; letter-spacing: -0.025em; margin: 18px 0 16px; }
+    .hero .lede { font-size: 20px; color: var(--muted); margin: 0 0 30px; max-width: 30em; }
+    .hero-icon { width: 92px; height: 92px; }
+    .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 18px; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 14px 24px; border-radius: 999px;
+      background: linear-gradient(180deg, var(--accent), var(--accent-2));
+      color: var(--accent-text); font-weight: 600; font-size: 17px;
+      box-shadow: 0 6px 20px rgba(106, 92, 245, .35);
+    }
+    .btn:hover { text-decoration: none; filter: brightness(1.06); }
+    .btn svg { width: 18px; height: 18px; }
+    .meta { color: var(--muted); font-size: 14px; margin-top: 14px; }
+
+    /* Illustration */
+    .scene { position: relative; }
+    .menubar {
+      display: flex; justify-content: flex-end; align-items: center; gap: 18px;
+      height: 34px; padding: 0 16px; border-radius: 12px 12px 0 0;
+      background: var(--menubar); border: 1px solid var(--border); border-bottom: none;
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      font-size: 13.5px; color: var(--text);
+    }
+    .menubar .dim { color: var(--muted); }
+    .menubar .item { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 6px; font-weight: 500; }
+    .menubar .item.active { background: var(--bar); }
+    .menubar .item svg { width: 17px; height: 13px; }
+    .panel-area { position: relative; height: 540px; border: 1px solid var(--border); border-top: none; border-radius: 0 0 12px 12px;
+      background: radial-gradient(120% 90% at 80% 0%, rgba(106,92,245,.18), transparent 60%), var(--surface-2); overflow: hidden; }
+    .panel {
+      position: absolute; right: 18px; top: 10px; width: 280px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow);
+      padding: 16px; font-size: 13px;
+    }
+    .panel .label { color: var(--muted); font-size: 11.5px; }
+    .panel .big { font: 600 40px/1.05 ui-rounded, -apple-system, "SF Pro Rounded", sans-serif; letter-spacing: -0.01em; }
+    .panel hr { border: 0; border-top: 1px solid var(--border); margin: 12px 0; }
+    .rows { display: grid; grid-template-columns: 34px 1fr auto; row-gap: 5px; }
+    .rows .sym { color: var(--muted); text-align: right; padding-right: 10px; }
+    .stats { display: flex; justify-content: space-between; }
+    .stats b { display: block; font-size: 15px; }
+    .chart { display: flex; align-items: flex-end; gap: 4px; height: 70px; margin-top: 10px; border-bottom: 1px solid var(--border); position: relative; }
+    .chart span { flex: 1; background: var(--bar); border-radius: 2px 2px 0 0; }
+    .chart span.today { background: var(--accent); }
+    .chart .limit { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--muted); opacity: .7; }
+    .panel .foot { display: flex; justify-content: space-between; margin-top: 12px; color: var(--muted); font-size: 11.5px; }
+    .note { position: absolute; left: 22px; bottom: 18px; max-width: 250px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; box-shadow: var(--shadow); padding: 12px 14px; font-size: 13px; display: flex; gap: 10px; }
+    .note img { width: 30px; height: 30px; flex: none; }
+    .note b { display: block; }
+    .note span { color: var(--muted); }
+
+    /* Sections */
+    section { padding: 64px 0; }
+    section + section { border-top: 1px solid var(--border); }
+    h2 { font-size: clamp(28px, 4vw, 38px); letter-spacing: -0.02em; line-height: 1.15; margin: 0 0 12px; }
+    .section-lede { color: var(--muted); font-size: 19px; margin: 0 0 36px; max-width: 36em; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; }
+    .card h3 { margin: 12px 0 6px; font-size: 18px; }
+    .card p { margin: 0; color: var(--muted); font-size: 15.5px; }
+    .glyph { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center;
+      background: linear-gradient(180deg, rgba(106,92,245,.16), rgba(138,79,220,.16)); color: var(--accent); font-weight: 600; font-size: 17px; }
+    .keys { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    kbd { font: 500 13px/1 -apple-system, sans-serif; padding: 5px 8px; border-radius: 7px; border: 1px solid var(--border);
+      background: var(--surface-2); color: var(--text); box-shadow: inset 0 -1px 0 var(--border); }
+
+    .privacy { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; }
+    .checklist { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
+    .checklist li { display: flex; gap: 12px; }
+    .checklist svg { flex: none; width: 22px; height: 22px; color: var(--accent); margin-top: 2px; }
+
+    ol.steps { list-style: none; counter-reset: step; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    ol.steps li { counter-increment: step; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; }
+    ol.steps li::before { content: counter(step); display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
+      background: var(--accent); color: var(--accent-text); font-weight: 600; font-size: 15px; margin-bottom: 12px; }
+    ol.steps h3 { margin: 0 0 6px; font-size: 18px; }
+    ol.steps p { margin: 0; color: var(--muted); font-size: 15.5px; }
+    .path { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13.5px; color: var(--text); }
+
+    details { border-bottom: 1px solid var(--border); padding: 16px 0; }
+    details:first-of-type { border-top: 1px solid var(--border); }
+    summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; color: var(--muted); font-weight: 400; font-size: 22px; line-height: 1; }
+    details[open] summary::after { content: "−"; }
+    details p { color: var(--muted); margin: 10px 0 0; max-width: 46em; }
+
+    .closing { text-align: center; }
+    .closing .btn { margin-top: 8px; }
+    footer { border-top: 1px solid var(--border); padding: 28px 0 40px; color: var(--muted); font-size: 14px; }
+    footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; }
+
+    @media (max-width: 860px) {
+      .hero { grid-template-columns: 1fr; gap: 40px; padding-top: 28px; }
+      .grid, ol.steps { grid-template-columns: 1fr 1fr; }
+      .privacy { grid-template-columns: 1fr; gap: 24px; }
+    }
+    @media (max-width: 560px) {
+      body { font-size: 16px; }
+      nav.links { display: none; }
+      .grid, ol.steps { grid-template-columns: 1fr; }
+      .hero .lede { font-size: 18px; }
+      .panel { right: 10px; left: 10px; width: auto; }
+      .panel-area { height: 440px; }
+      .note { display: none; }
+      .menubar .hide-sm { display: none; }
+      section { padding: 48px 0; }
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .chart span { transform-origin: bottom; animation: grow .9s cubic-bezier(.2,.8,.2,1) both; }
+      .chart span:nth-child(odd) { animation-delay: .05s; }
+      @keyframes grow { from { transform: scaleY(0); } }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <a class="brand" href="./"><img src="assets/icon.png" alt="" width="30" height="30">Backspace</a>
+      <nav class="links" aria-label="Sections">
+        <a href="#features">Features</a>
+        <a href="#privacy">Privacy</a>
+        <a href="#start">Get started</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap">
+      <div class="hero">
+        <div>
+          <img class="hero-icon" src="assets/icon.png" alt="Backspace app icon" width="92" height="92">
+          <h1>Every backspace,<br>counted.</h1>
+          <p class="lede">Backspace is a tiny Mac app that shows how many times you've hit <kbd>⌫</kbd> today, right in your menu bar. No judgment, just a quiet number that helps you notice.</p>
+          <div class="cta">
+            <a class="btn" href="https://github.com/srosky/backspace-releases/releases/latest/download/Backspace.zip">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+              Download for Mac
+            </a>
+            <a href="https://github.com/srosky/backspace-releases/releases">Release notes</a>
+          </div>
+          <p class="meta"><span id="version">Version 0.1.0</span> · macOS 14 Sonoma or later · Free</p>
+        </div>
+
+        <div class="scene" aria-label="Illustration of the Backspace menu bar item and its window">
+          <div class="menubar" aria-hidden="true">
+            <span class="dim hide-sm">Wi-Fi</span>
+            <span class="item active num">
+              <svg viewBox="0 0 34 26" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"><path d="M11 3h19a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H11L2 13z"/><path d="m16 9 8 8m0-8-8 8" stroke-linecap="round"/></svg>
+              142
+            </span>
+            <span class="dim num">Sun 9:41</span>
+          </div>
+          <div class="panel-area">
+            <div class="panel" aria-hidden="true">
+              <div class="label">Today</div>
+              <div class="big num">142</div>
+              <div class="label">backspaces</div>
+              <hr>
+              <div class="rows num">
+                <span class="sym">⌫</span><span>Backspace</span><span>128</span>
+                <span class="sym">⌥⌫</span><span>Delete word</span><span>14</span>
+                <span class="sym">⌨︎</span><span>Total keystrokes</span><span>3,016</span>
+                <span class="sym">%</span><span>Backspace ratio</span><span>4.7%</span>
+              </div>
+              <hr>
+              <div class="stats num">
+                <div><span class="label">Yesterday</span><b>168</b></div>
+                <div style="text-align:right"><span class="label">7-day average</span><b>155</b></div>
+              </div>
+              <div class="chart">
+                <span style="height:52%"></span><span style="height:64%"></span><span style="height:47%"></span><span style="height:71%"></span>
+                <span style="height:58%"></span><span style="height:39%"></span><span style="height:44%"></span><span style="height:66%"></span>
+                <span style="height:80%"></span><span style="height:55%"></span><span style="height:61%"></span><span style="height:50%"></span>
+                <span style="height:57%"></span><span class="today" style="height:43%"></span>
+                <i class="limit" style="bottom:78%"></i>
+              </div>
+              <div class="foot"><span>Resets at 12:00 AM</span><span>Settings…</span></div>
+            </div>
+            <div class="note" aria-hidden="true">
+              <img src="assets/icon.png" alt="">
+              <div><b>Heads up</b><span>320 of 400 backspaces today.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <section id="features">
+      <div class="wrap">
+        <h2>Small app, clear picture.</h2>
+        <p class="section-lede">Everything stays out of your way until you want it. Out of the box it's a silent counter. Every nudge is opt-in.</p>
+        <div class="grid">
+          <div class="card">
+            <div class="glyph">⌫</div>
+            <h3>Always in view</h3>
+            <p>Today's count sits in your menu bar in the system's own colors, so it fits right in with light or dark mode.</p>
+          </div>
+          <div class="card">
+            <div class="glyph">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            </div>
+            <h3>Resets when you want</h3>
+            <p>A fresh count every day at midnight, or any time you choose. Night owls can reset at 4 AM. Handles sleep and daylight saving correctly.</p>
+          </div>
+          <div class="card">
+            <div class="glyph">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V12M10 20V6M15 20v-9M20 20V9"/></svg>
+            </div>
+            <h3>See the trend</h3>
+            <p>Click the count for yesterday, your 7-day average, a 14-day chart, and your backspace ratio against everything you type.</p>
+          </div>
+          <div class="card">
+            <div class="glyph">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+            </div>
+            <h3>Gentle nudges</h3>
+            <p>Set a daily limit and get a notification at a warning point and at the limit. Add a soft click per press or a chime every 100 if you like.</p>
+          </div>
+          <div class="card">
+            <div class="glyph">⌥</div>
+            <h3>Choose what counts</h3>
+            <p>Plain backspace and word-delete count by default. Add line-delete or forward delete with one click; your history updates instantly.</p>
+            <div class="keys"><kbd>⌫</kbd><kbd>⌥ ⌫</kbd><kbd>⌘ ⌫</kbd><kbd>⌦</kbd></div>
+          </div>
+          <div class="card">
+            <div class="glyph">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+            </div>
+            <h3>Private by design</h3>
+            <p>Backspace keeps numbers, never keystrokes. No account, no analytics, no cloud. Your history lives in a small file on your Mac.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="privacy">
+      <div class="wrap privacy">
+        <div>
+          <h2>It counts. It doesn't read.</h2>
+          <p class="section-lede">To notice a backspace in any app, macOS asks you to allow <strong>Input Monitoring</strong>. Here's exactly what Backspace does with it.</p>
+        </div>
+        <ul class="checklist">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Stores only a tally per key type per day, never letters, words, timing or which app you were in.</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Password fields are hidden from it by macOS, so they're never counted at all.</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Listen-only: it can't change, block or send any key press.</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>The only network request is a daily check for app updates.</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Signed by Northerly Labs Ltd. and notarized by Apple.</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="start">
+      <div class="wrap">
+        <h2>Up and counting in a minute.</h2>
+        <p class="section-lede">Requires macOS 14 Sonoma or later, on Apple silicon or Intel.</p>
+        <ol class="steps">
+          <li>
+            <h3>Download and install</h3>
+            <p>Open <span class="path">Backspace.zip</span> and drag <strong>Backspace</strong> into your <strong>Applications</strong> folder, so updates can install themselves.</p>
+          </li>
+          <li>
+            <h3>Allow Input Monitoring</h3>
+            <p>Open Backspace and click <strong>Grant Access</strong>. In System Settings ▸ Privacy &amp; Security ▸ Input Monitoring, switch on <strong>Backspace</strong>.</p>
+          </li>
+          <li>
+            <h3>That's it</h3>
+            <p><kbd>⌫ 0</kbd> appears in your menu bar and starts counting. Click it for your stats, or open Settings to set a reset time or a daily limit.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="faq">
+      <div class="wrap">
+        <h2>Questions</h2>
+        <details>
+          <summary>Why does it need Input Monitoring?</summary>
+          <p>It's the only way for an app to notice a key press while you're typing in another app. Backspace uses it in listen-only mode and keeps nothing but counts. You can switch it off any time in System Settings ▸ Privacy &amp; Security ▸ Input Monitoring.</p>
+        </details>
+        <details>
+          <summary>Does holding the key down count?</summary>
+          <p>Yes. Each repeated delete counts, so the number matches the characters you actually removed. Per-press sounds stay quiet while the key repeats, unless you turn that off.</p>
+        </details>
+        <details>
+          <summary>What happens if my Mac is asleep at reset time?</summary>
+          <p>Backspace resets as soon as your Mac wakes up, and earlier presses stay with the day they belong to. Missed days don't show up as empty rows.</p>
+        </details>
+        <details>
+          <summary>How do updates work?</summary>
+          <p>Backspace checks once a day and offers new versions with a standard update window. You can turn automatic checks off in Settings ▸ General, or check by hand.</p>
+        </details>
+        <details>
+          <summary>How do I uninstall it?</summary>
+          <p>Quit Backspace from its menu bar window and move the app to the Trash. To remove your history too, delete <span class="path">~/Library/Application Support/Backspace</span>.</p>
+        </details>
+      </div>
+    </section>
+
+    <section class="closing">
+      <div class="wrap">
+        <h2>Start noticing.</h2>
+        <p class="section-lede" style="margin-inline:auto">Free, tiny, and quiet until you ask it not to be.</p>
+        <a class="btn" href="https://github.com/srosky/backspace-releases/releases/latest/download/Backspace.zip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+          Download for Mac
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>© 2026 Northerly Labs Ltd.</span>
+      <span><a href="https://github.com/srosky/backspace-releases/releases">All releases</a></span>
+    </div>
+  </footer>
+
+  <script>
+    // Show the newest version and its date. Falls back to the static text if GitHub's API is unavailable.
+    fetch("https://api.github.com/repos/srosky/backspace-releases/releases/latest")
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(release => {
+        const version = String(release.tag_name || "").replace(/^v/, "");
+        if (!version) return;
+        const date = new Date(release.published_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+        document.getElementById("version").textContent = "Version " + version + " · " + date;
+      })
+      .catch(() => {});
+  </script>
+</body>
+</html>
